@@ -65,6 +65,17 @@ class AnalysisResult(BaseModel):
     unresolved_calls: List[UnresolvedCall] = Field(default_factory=list)
     diagnostics: List[ScanDiagnostic] = Field(default_factory=list)
     limitations: List[str] = Field(default_factory=list)
+    # Backward-compatible addition: top-level external package imports found across all files.
+    # Each entry is the root package name as written in the source (e.g. "numpy", "sklearn").
+    # Used by SkillGraph as one evidence signal; never used to claim proficiency alone.
+    imported_packages: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Deduplicated list of external package names imported anywhere in the repository. "
+            "Each entry is the root package identifier as written in the source file "
+            "(e.g. 'numpy', 'sklearn'). Standard-library modules are excluded."
+        ),
+    )
 
 
 class ChangeImpactReport(BaseModel):

@@ -1,5 +1,5 @@
 import { BackendStatusCard } from "@/components/BackendStatusCard";
-import { RepoMindDashboard } from "@/components/repomind/RepoMindDashboard";
+import { DevPathClient } from "@/components/DevPathClient";
 
 export default function Home() {
   return (
@@ -12,7 +12,7 @@ export default function Home() {
               DevPath AI
             </h1>
             <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800 dark:bg-indigo-950/70 dark:text-indigo-300">
-              Milestone 3: Interactive Visualizer
+              Milestone 4: SkillGraph
             </span>
           </div>
           <p className="mt-1 text-base text-zinc-600 dark:text-zinc-400">
@@ -33,24 +33,8 @@ export default function Home() {
           <BackendStatusCard />
         </section>
 
-        {/* RepoMind Visualizer Section (Milestone 3) */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 font-mono text-xs font-bold text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                RM
-              </span>
-              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                RepoMind: Code Graph & Change Impact Visualizer
-              </h2>
-            </div>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
-              React Flow 12 • AST Static Analysis
-            </span>
-          </div>
-
-          <RepoMindDashboard />
-        </section>
+        {/* RepoMind + SkillGraph (Milestones 3 & 4) — shared state via DevPathClient */}
+        <DevPathClient />
 
         {/* Product Component Cards */}
         <section className="grid grid-cols-1 gap-6 md:grid-cols-2">

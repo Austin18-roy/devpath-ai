@@ -1,4 +1,5 @@
 import ast
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -30,6 +31,28 @@ BUILTIN_NAMES: Set[str] = {
     "repr", "round", "pow", "divmod", "hash", "id", "callable", "vars", "dir",
     "type", "format", "eval", "exec", "compile", "breakpoint", "help",
 }
+
+# Python standard-library module names (top-level). Used to exclude them from
+# the imported_packages list so only genuine third-party packages are surfaced.
+_STDLIB_TOP_LEVEL: Set[str] = set(sys.stdlib_module_names) if hasattr(sys, "stdlib_module_names") else {
+    "abc", "ast", "asyncio", "builtins", "collections", "concurrent",
+    "contextlib", "copy", "csv", "dataclasses", "datetime", "decimal",
+    "difflib", "email", "enum", "fileinput", "fnmatch", "fractions",
+    "functools", "gc", "glob", "gzip", "hashlib", "heapq", "hmac",
+    "html", "http", "importlib", "inspect", "io", "ipaddress", "itertools",
+    "json", "keyword", "linecache", "logging", "math", "mimetypes",
+    "multiprocessing", "operator", "os", "pathlib", "pickle", "platform",
+    "pprint", "queue", "random", "re", "shutil", "signal", "socket",
+    "sqlite3", "ssl", "stat", "string", "struct", "subprocess", "sys",
+    "tempfile", "textwrap", "threading", "time", "timeit", "tokenize",
+    "traceback", "types", "typing", "unittest", "urllib", "uuid",
+    "warnings", "weakref", "xml", "xmlrpc", "zipfile", "zlib",
+}
+
+
+def _is_stdlib_module(name: str) -> bool:
+    """Return True if `name` is a Python standard-library top-level module."""
+    return name in _STDLIB_TOP_LEVEL
 
 
 def make_symbol_id(symbol_type: SymbolType, file_rel_path: str, qualified_name: str) -> str:
@@ -71,6 +94,9 @@ class RepoMindASTVisitor(ast.NodeVisitor):
         self.scope_symbol_ids: List[str] = []  # Stack of enclosing symbol IDs
         self.imports = ModuleImports(file_rel_path)
         self.diagnostics: List[ScanDiagnostic] = []
+        # Root package names of external (non-project-local) imports.
+        # Used by SkillGraph as one evidence signal. Never executed.
+        self.external_imports: Set[str] = set()
 
     def visit_Import(self, node: ast.Import):
         for alias in node.names:
@@ -78,6 +104,11 @@ class RepoMindASTVisitor(ast.NodeVisitor):
             target_rel_path = self._resolve_module_path(alias.name)
             if target_rel_path:
                 self.imports.imported_modules[local_name] = target_rel_path
+            else:
+                # External package: record the root package name (first component)
+                root_pkg = alias.name.split(".")[0]
+                if root_pkg:
+                    self.external_imports.add(root_pkg)
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom):
@@ -86,6 +117,11 @@ class RepoMindASTVisitor(ast.NodeVisitor):
             local_name = alias.asname or alias.name
             if resolved_module:
                 self.imports.imported_symbols[local_name] = (resolved_module, alias.name)
+        if not resolved_module and node.module:
+            # External package: record the root package name
+            root_pkg = node.module.split(".")[0]
+            if root_pkg:
+                self.external_imports.add(root_pkg)
         self.generic_visit(node)
 
     def visit_ClassDef(self, node: ast.ClassDef):
@@ -353,6 +389,14 @@ class RepoMindParser:
         unresolved_calls.sort(key=lambda u: (u.caller_symbol_id, u.line_number, u.call_expression))
         diagnostics.sort(key=lambda d: (d.file_path, d.line_number or 0, d.message))
 
+        # Collect external imports across all files; filter out stdlib modules.
+        raw_external: Set[str] = set()
+        for visitor in file_visitors.values():
+            raw_external.update(visitor.external_imports)
+        imported_packages = sorted(
+            pkg for pkg in raw_external if not _is_stdlib_module(pkg)
+        )
+
         return AnalysisResult(
             repo_path=str(self.repo_path),
             files_scanned=len(files),
@@ -363,6 +407,7 @@ class RepoMindParser:
             unresolved_calls=unresolved_calls,
             diagnostics=diagnostics,
             limitations=STATIC_ANALYSIS_LIMITATIONS,
+            imported_packages=imported_packages,
         )
 
     def _resolve_call_target(

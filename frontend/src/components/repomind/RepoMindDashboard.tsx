@@ -8,7 +8,13 @@ import { RepoScanner } from "./RepoScanner";
 import { RepoMindGraphView } from "./RepoMindGraphView";
 import { SymbolDetailsDrawer } from "./SymbolDetailsDrawer";
 
-export function RepoMindDashboard() {
+interface RepoMindDashboardProps {
+  /** Optional callback invoked whenever a scan completes (or is cleared).
+   *  Used by the parent DevPathClient to share the result with SkillGraph. */
+  onAnalysisResult?: (result: AnalysisResult | null) => void;
+}
+
+export function RepoMindDashboard({ onAnalysisResult }: RepoMindDashboardProps = {}) {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [impactReport, setImpactReport] = useState<ChangeImpactReport | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<CodeSymbol | null>(null);
@@ -29,18 +35,20 @@ export function RepoMindDashboard() {
     try {
       const result = await analyzeRepository(path);
       setAnalysisResult(result);
+      onAnalysisResult?.(result);
       // Auto-select multiply if present, or first function/method for immediate inspection
       const multiplySym = result.symbols.find((s) => s.name === "multiply" && s.symbol_type === "function");
       const firstFunc = result.symbols.find((s) => s.symbol_type === "function" || s.symbol_type === "method");
       setSelectedSymbol(multiplySym || firstFunc || result.symbols[0] || null);
     } catch (err) {
       setAnalysisResult(null);
+      onAnalysisResult?.(null);
       setSelectedSymbol(null);
       setError(err instanceof Error ? err.message : "Failed to analyze repository");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [onAnalysisResult]);
 
   const handleAnalyzeImpact = useCallback(async (symbolId: string) => {
     // Prefer the canonical repo_path returned by the backend scan

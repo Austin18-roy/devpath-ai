@@ -133,6 +133,6 @@ devpath-ai/
 - [x] **Milestone 1**: Project skeleton, FastAPI `/api/v1/health` with CORS, Next.js frontend with live status indicator, automated test suites (pytest + node:test), macOS M2 developer setup.
 - [x] **Milestone 2**: RepoMind AST Parser, module/class/function extraction, NetworkX dependency graph, and reverse-reachability change-impact analysis (`POST /api/v1/repomind/analyze` and `POST /api/v1/repomind/impact`).
 - [x] **Milestone 3**: RepoMind interactive React Flow visualization (`@xyflow/react`), live codebase scanner with real API metrics, symbol inspector drawer, and visual change-impact blast-radius highlighting.
-- [ ] **Milestone 4**: SkillGraph evidence extraction, job description parser, and local embedding similarity scoring.
-- [ ] **Milestone 5**: SkillGraph gap dashboard and portfolio recommendations.
+- [x] **Milestone 4**: SkillGraph job-description skill extraction & alias normalization, evidence matching against repository artifacts (imports, symbols, docstrings), 3-tier classification (strong/weak/none) with plain-English rationales, actionable gap recommendations, and interactive UI dashboard.
+- [ ] **Milestone 5**: Local embedding similarity scoring and enhanced portfolio resource links.
 - [ ] **Milestone 6**: End-to-end integration, sample demo repository, and final documentation polish.
