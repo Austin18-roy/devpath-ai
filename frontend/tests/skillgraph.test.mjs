@@ -15,10 +15,11 @@ import assert from "node:assert/strict";
 /**
  * Pure helper: build a SkillMatch payload (mirrors skillgraph-api.ts logic).
  */
-function buildSkillMatchPayload(jobDescription, analysisResult) {
+function buildSkillMatchPayload(jobDescription, analysisResult, targetRole) {
   return {
     job_description: jobDescription,
     analysis_result: analysisResult ?? null,
+    target_role: targetRole ?? "all",
   };
 }
 
@@ -60,11 +61,26 @@ function getTierBadgeClasses(tier) {
   }
 }
 
+/**
+ * Pure helper: get confidence badge styling (mirrors skillgraph-api.ts).
+ */
+function getConfidenceBadgeClasses(confidence) {
+  switch (confidence) {
+    case "high":
+      return { label: "High confidence", text: "text-emerald-700 dark:text-emerald-300" };
+    case "medium":
+      return { label: "Medium confidence", text: "text-amber-700 dark:text-amber-300" };
+    case "low":
+    default:
+      return { label: "Low confidence", text: "text-zinc-600 dark:text-zinc-400" };
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Test 1: buildSkillMatchPayload — with analysis result
+// Test 1: buildSkillMatchPayload — with analysis result and target role
 // ---------------------------------------------------------------------------
 
-test("buildSkillMatchPayload includes analysis_result when provided", () => {
+test("buildSkillMatchPayload includes analysis_result and target_role when provided", () => {
   const mockAnalysis = {
     repo_path: "/repo",
     files_scanned: 3,
@@ -78,42 +94,75 @@ test("buildSkillMatchPayload includes analysis_result when provided", () => {
     imported_packages: ["numpy", "pandas"],
   };
 
-  const payload = buildSkillMatchPayload("We need a Python developer with numpy.", mockAnalysis);
+  const payload = buildSkillMatchPayload(
+    "We need a Python developer with numpy.",
+    mockAnalysis,
+    "aiml_engineer"
+  );
 
   assert.equal(payload.job_description, "We need a Python developer with numpy.");
   assert.deepEqual(payload.analysis_result, mockAnalysis);
+  assert.equal(payload.target_role, "aiml_engineer");
   assert.deepEqual(payload.analysis_result.imported_packages, ["numpy", "pandas"]);
 });
 
 // ---------------------------------------------------------------------------
-// Test 2: buildSkillMatchPayload — without analysis result
+// Test 2: buildSkillMatchPayload — without analysis result defaults
 // ---------------------------------------------------------------------------
 
-test("buildSkillMatchPayload sets analysis_result to null when not provided", () => {
+test("buildSkillMatchPayload sets analysis_result to null and target_role to 'all' when not provided", () => {
   const payload = buildSkillMatchPayload("Looking for a FastAPI developer.");
 
   assert.equal(payload.job_description, "Looking for a FastAPI developer.");
   assert.equal(payload.analysis_result, null);
+  assert.equal(payload.target_role, "all");
 });
 
 // ---------------------------------------------------------------------------
-// Test 3: parseSkillResponse — correct required/preferred split
+// Test 3: parseSkillResponse — correct required/preferred split with roadmap task
 // ---------------------------------------------------------------------------
 
-test("parseSkillResponse correctly separates required and preferred arrays", () => {
+test("parseSkillResponse correctly separates required and preferred arrays with roadmap task", () => {
   const mockResponse = {
     skills_required: [
-      { canonical_name: "numpy", evidence_tier: "none", aliases_matched: ["numpy"], evidence_items: [], explanation: "No evidence.", recommendation: "Add numpy." },
-      { canonical_name: "pytorch", evidence_tier: "weak", aliases_matched: ["torch"], evidence_items: [], explanation: "Weak.", recommendation: "Add pytorch." },
+      {
+        canonical_name: "pytorch",
+        evidence_tier: "none",
+        aliases_matched: ["torch"],
+        evidence_items: [],
+        explanation: "No evidence found.",
+        recommendation: "Build a model.",
+        related_skills: ["numpy", "transformers"],
+        roadmap_task: {
+          skill_name: "pytorch",
+          task_title: "Build and Train a PyTorch Classifier",
+          objective: "Train a model",
+          difficulty: "intermediate",
+          estimated_hours: 3,
+          completion_criteria: ["Criterion 1"],
+          deliverable: "train.py",
+          role_relevance: "Core deep learning",
+          resources: [],
+        },
+      },
     ],
     skills_preferred: [
-      { canonical_name: "docker", evidence_tier: "none", aliases_matched: ["docker"], evidence_items: [], explanation: "No evidence.", recommendation: "Add docker." },
+      {
+        canonical_name: "docker",
+        evidence_tier: "none",
+        aliases_matched: ["docker"],
+        evidence_items: [],
+        explanation: "No evidence.",
+        recommendation: "Add docker.",
+        related_skills: ["kubernetes"],
+        roadmap_task: null,
+      },
     ],
     summary: {
-      required_count: 2,
+      required_count: 1,
       preferred_count: 1,
       strong_evidence_count: 0,
-      weak_evidence_count: 1,
+      weak_evidence_count: 0,
       no_evidence_count: 2,
       coverage_note: "Test coverage note.",
     },
@@ -122,10 +171,14 @@ test("parseSkillResponse correctly separates required and preferred arrays", () 
 
   const { required, preferred } = parseSkillResponse(mockResponse);
 
-  assert.equal(required.length, 2);
+  assert.equal(required.length, 1);
   assert.equal(preferred.length, 1);
-  assert.equal(required[0].canonical_name, "numpy");
+  assert.equal(required[0].canonical_name, "pytorch");
+  assert.notEqual(required[0].roadmap_task, null);
+  assert.equal(required[0].roadmap_task.skill_name, "pytorch");
+  assert.deepEqual(required[0].related_skills, ["numpy", "transformers"]);
   assert.equal(preferred[0].canonical_name, "docker");
+  assert.equal(preferred[0].roadmap_task, null);
 });
 
 // ---------------------------------------------------------------------------
@@ -178,5 +231,65 @@ test("getTierBadgeClasses returns red for none", () => {
 test("getTierBadgeClasses returns red for unknown tier", () => {
   const classes = getTierBadgeClasses("unknown_value");
   assert.equal(classes.label, "No evidence");
+});
+
+// ---------------------------------------------------------------------------
+// Test 6: getConfidenceBadgeClasses — correct styles per confidence
+// ---------------------------------------------------------------------------
+
+test("getConfidenceBadgeClasses returns correct label and styles", () => {
+  assert.equal(getConfidenceBadgeClasses("high").label, "High confidence");
+  assert.ok(getConfidenceBadgeClasses("high").text.includes("emerald"));
+
+  assert.equal(getConfidenceBadgeClasses("medium").label, "Medium confidence");
+  assert.ok(getConfidenceBadgeClasses("medium").text.includes("amber"));
+
+  assert.equal(getConfidenceBadgeClasses("low").label, "Low confidence");
+  assert.ok(getConfidenceBadgeClasses("low").text.includes("zinc"));
+
+  assert.equal(getConfidenceBadgeClasses("unknown").label, "Low confidence");
+});
+
+// ---------------------------------------------------------------------------
+// Test 7: Roadmap task fields resolution (objective & role relevance fallbacks)
+// ---------------------------------------------------------------------------
+
+test("roadmap task fields resolve correctly with fallbacks", () => {
+  const taskWithObjective = {
+    skill_name: "numpy",
+    title: "NumPy Regression",
+    objective: "Implement linear regression from scratch",
+    role_relevance: "Crucial for mathematical modeling in AI/ML",
+    deliverable: "matrix_regression.py",
+    completion_criteria: ["crit 1"],
+    resources: [],
+  };
+
+  const taskWithDescription = {
+    skill_name: "fastapi",
+    task_title: "REST API Validation",
+    description: "Build a typed API with Pydantic",
+    target_role_relevance: "Essential for microservices in SDE",
+    deliverable: "main.py",
+    completion_criteria: ["crit 1"],
+    resources: [],
+  };
+
+  // Helper matching CareerRoadmapView logic
+  const resolveFields = (t) => ({
+    title: t.title || t.task_title || "",
+    roleRelevance: t.role_relevance || t.target_role_relevance || "",
+    objective: t.objective || t.description || "",
+  });
+
+  const res1 = resolveFields(taskWithObjective);
+  assert.equal(res1.title, "NumPy Regression");
+  assert.equal(res1.roleRelevance, "Crucial for mathematical modeling in AI/ML");
+  assert.equal(res1.objective, "Implement linear regression from scratch");
+
+  const res2 = resolveFields(taskWithDescription);
+  assert.equal(res2.title, "REST API Validation");
+  assert.equal(res2.roleRelevance, "Essential for microservices in SDE");
+  assert.equal(res2.objective, "Build a typed API with Pydantic");
 });
 

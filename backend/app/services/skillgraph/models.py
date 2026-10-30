@@ -14,24 +14,76 @@ from app.services.repomind.models import AnalysisResult
 
 
 # ---------------------------------------------------------------------------
-# Evidence tier
+# Evidence tier and confidence
 # ---------------------------------------------------------------------------
 
 class EvidenceTier(str, Enum):
     """
     Three-tier evidence classification.
 
-    STRONG: Import found AND at least one corroborating symbol/docstring, OR
-            two or more independent symbol/docstring references.
-    WEAK:   Import found with no corroboration, OR exactly one symbol/docstring
-            reference with no import.
+    STRONG: Authored code evidence corroborated by an import or multiple
+            independent authored code signals.
+    WEAK:   Single signal only (e.g. import alone, single call pattern alone,
+            or single isolated symbol name).
     NONE:   No evidence found in the repository.
 
-    An import alone is NEVER classified as STRONG.
+    An import alone or an isolated API invocation alone is NEVER classified as STRONG.
     """
     STRONG = "strong"
     WEAK = "weak"
     NONE = "none"
+
+
+class EvidenceConfidence(str, Enum):
+    """
+    Quality and certainty of an individual evidence artifact.
+
+    HIGH:   Direct method/API call invocation (e.g., `torch.nn.Linear`, `pd.read_csv`)
+            or framework base-class inheritance.
+    MEDIUM: Authored symbol name token match or descriptive docstring reference.
+    LOW:    Top-level package import alone (indicates library inclusion, not authorship).
+    NONE:   No matching evidence found.
+    """
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    NONE = "none"
+
+
+# ---------------------------------------------------------------------------
+# Learning resources & Roadmap models
+# ---------------------------------------------------------------------------
+
+class LearningResourceModel(BaseModel):
+    """Verified free documentation or learning material for a skill."""
+
+    model_config = {"extra": "forbid"}
+
+    title: str = Field(..., description="Resource title")
+    url: str = Field(..., description="Verified HTTPS URL")
+    provider: str = Field(..., description="Organization or maintainer (e.g., Python Software Foundation)")
+    resource_type: str = Field(..., description="Resource format: 'official_docs', 'tutorial', 'handbook'")
+
+
+class RoadmapTask(BaseModel):
+    """Actionable mini-project roadmap task for a specific skill gap."""
+
+    model_config = {"extra": "forbid"}
+
+    task_id: str = Field(..., description="Unique task identifier")
+    skill_name: str = Field(..., description="Canonical skill name")
+    title: str = Field(..., description="Concise mini-project title")
+    task_title: Optional[str] = Field(None, description="Frontend alias for title")
+    difficulty: str = Field(..., description="Difficulty rating: 'Beginner', 'Intermediate', 'Advanced'")
+    estimated_hours: int = Field(..., description="Estimated completion time in hours (typically 2-4 hours)")
+    target_role_relevance: str = Field(..., description="Why this skill matters for the specified target career role")
+    role_relevance: Optional[str] = Field(None, description="Frontend alias for target_role_relevance")
+    objective: Optional[str] = Field(None, description="What the learner should accomplish in this project")
+    description: str = Field(..., description="Step-by-step description of what to implement")
+    deliverable: str = Field(..., description="Tangible portfolio deliverable (script, test suite, config)")
+    completion_criteria: List[str] = Field(default_factory=list, description="Measurable completion checklist")
+    developed_skills: List[str] = Field(default_factory=list, description="Complementary skills exercised by this task")
+    resources: List[LearningResourceModel] = Field(default_factory=list, description="Verified free learning resources")
 
 
 # ---------------------------------------------------------------------------
@@ -45,19 +97,23 @@ class EvidenceItem(BaseModel):
 
     kind: str = Field(
         ...,
-        description="Type of evidence: 'import', 'symbol', or 'docstring'.",
+        description="Type of evidence: 'import', 'call_pattern', 'symbol', or 'docstring'.",
+    )
+    confidence: EvidenceConfidence = Field(
+        EvidenceConfidence.MEDIUM,
+        description="Confidence/quality level of this evidence item.",
     )
     package: Optional[str] = Field(
         None,
-        description="Root package name as written in the import statement (kind='import' only).",
+        description="Root package name as written in the import statement.",
     )
     symbol_id: Optional[str] = Field(
         None,
-        description="Stable symbol ID from AnalysisResult (kind='symbol'/'docstring' only).",
+        description="Stable symbol ID from AnalysisResult.",
     )
     symbol_name: Optional[str] = Field(
         None,
-        description="Human-readable symbol name (kind='symbol'/'docstring' only).",
+        description="Human-readable symbol name.",
     )
     file_path: Optional[str] = Field(
         None,
@@ -73,7 +129,7 @@ class EvidenceItem(BaseModel):
     )
     line_number: Optional[int] = Field(
         None,
-        description="Exact line number (used for import evidence when available).",
+        description="Exact line number (used for import or call_pattern evidence).",
     )
     detail: str = Field(
         ...,
@@ -110,12 +166,20 @@ class SkillResult(BaseModel):
         ...,
         description="Plain-English explanation of why this tier was assigned.",
     )
+    related_skills: List[str] = Field(
+        default_factory=list,
+        description="Ecosystem skills closely related to this technology from the skill relationship network.",
+    )
     recommendation: Optional[str] = Field(
         None,
         description=(
             "Actionable next step to strengthen evidence for this skill. "
             "Only present when tier is 'weak' or 'none'."
         ),
+    )
+    roadmap_task: Optional[RoadmapTask] = Field(
+        None,
+        description="Personalized practical mini-project for weak or missing skills.",
     )
 
 
@@ -157,6 +221,10 @@ class SkillMatchRequest(BaseModel):
             "Paste the full text; markdown headers are supported."
         ),
     )
+    target_role: Optional[str] = Field(
+        "all",
+        description="Target career role for tailoring roadmap tasks: 'all', 'aiml_engineer', 'genai_engineer', 'sde'.",
+    )
     analysis_result: Optional[AnalysisResult] = Field(
         None,
         description=(
@@ -180,6 +248,10 @@ class SkillMatchResponse(BaseModel):
         default_factory=list,
         description="Preferred skills extracted from the job description, in alphabetical order.",
     )
+    role_roadmap: List[RoadmapTask] = Field(
+        default_factory=list,
+        description="Intended role-tailored portfolio roadmap mini-projects.",
+    )
     summary: MatchSummary = Field(..., description="Aggregate evidence counts and coverage note.")
     disclaimer: str = Field(
         ...,
@@ -188,4 +260,3 @@ class SkillMatchResponse(BaseModel):
             "not personal skill level or hiring suitability."
         ),
     )
-

@@ -1,7 +1,7 @@
 "use client";
 
 import { EvidenceItem, SkillResult } from "@/lib/skillgraph-types";
-import { getTierBadgeClasses } from "@/lib/skillgraph-api";
+import { getTierBadgeClasses, getConfidenceBadgeClasses } from "@/lib/skillgraph-api";
 
 interface SkillResultCardProps {
   skill: SkillResult;
@@ -13,14 +13,23 @@ function EvidenceRow({ item }: { item: EvidenceItem }) {
     import: "📦",
     symbol: "⚙️",
     docstring: "📝",
+    call: "⚡",
   };
 
+  const confidenceBadge = getConfidenceBadgeClasses(item.confidence);
+
   return (
-    <li className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 p-2 text-xs dark:bg-zinc-800/60">
-      <div className="flex items-center gap-1.5">
+    <li className="flex flex-col gap-1 rounded-lg bg-zinc-50 p-2.5 text-xs dark:bg-zinc-800/60">
+      <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-base">{kindIcon[item.kind] ?? "•"}</span>
         <span className="font-mono font-semibold text-zinc-800 dark:text-zinc-200">
           {item.kind}
+        </span>
+        <span
+          className={`rounded px-1.5 py-0.2 text-[10px] font-medium ${confidenceBadge.bg}`}
+          title={`Confidence: ${item.confidence}`}
+        >
+          {confidenceBadge.label}
         </span>
         {item.file_path && (
           <span className="ml-auto font-mono text-zinc-500 dark:text-zinc-400">
@@ -84,13 +93,32 @@ export function SkillResultCard({ skill, isRequired }: SkillResultCardProps) {
       {skill.evidence_items.length > 0 && (
         <div className="mt-3">
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Evidence
+            Evidence ({skill.evidence_items.length})
           </p>
           <ul className="space-y-1.5">
             {skill.evidence_items.map((item, i) => (
               <EvidenceRow key={i} item={item} />
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Related Skills Badges */}
+      {skill.related_skills && skill.related_skills.length > 0 && (
+        <div className="mt-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+          <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5">
+            Related ecosystem skills:
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {skill.related_skills.map((rel) => (
+              <span
+                key={rel}
+                className="rounded-md bg-indigo-50 px-2 py-0.5 font-mono text-[11px] font-medium text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
+              >
+                {rel}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -108,4 +136,3 @@ export function SkillResultCard({ skill, isRequired }: SkillResultCardProps) {
     </div>
   );
 }
-

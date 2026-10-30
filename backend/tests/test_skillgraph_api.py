@@ -260,7 +260,88 @@ def test_repomind_regression_analyze_still_works(client):
     response = client.post("/api/v1/repomind/analyze", json={"repo_path": FIXTURE_ROOT})
     assert response.status_code == 200
     data = response.json()
-    assert data["files_scanned"] >= 4
+    assert data["files_scanned"] == 5
+    assert data["symbols_count"] == 16
+    assert data["edges_count"] == 7
     assert "imported_packages" in data  # new backward-compatible field present
     assert isinstance(data["imported_packages"], list)
 
+
+def test_match_api_target_role_customizes_roadmap(client):
+    """Test target_role query customizes roadmap task relevance."""
+    jd = "Requirements:\n- PyTorch experience required for model training."
+    response = client.post("/api/v1/skillgraph/match", json={
+        "job_description": jd,
+        "target_role": "genai_engineer",
+    })
+    assert response.status_code == 200
+    data = response.json()
+    pt = next((s for s in data["skills_required"] if s["canonical_name"] == "pytorch"), None)
+    assert pt is not None
+    assert pt["roadmap_task"] is not None
+    assert "genai" in pt["roadmap_task"]["target_role_relevance"].lower() or "attention" in pt["roadmap_task"]["target_role_relevance"].lower() or "transformer" in pt["roadmap_task"]["target_role_relevance"].lower()
+    assert len(pt["roadmap_task"]["resources"]) >= 1
+
+
+def test_match_api_includes_related_skills_and_resources(client):
+    """Verify related_skills array is populated in API response."""
+    jd = "Requirements:\n- Experience with FastAPI and NumPy required."
+    response = client.post("/api/v1/skillgraph/match", json={
+        "job_description": jd,
+        "target_role": "sde",
+    })
+    assert response.status_code == 200
+    data = response.json()
+    fastapi_skill = next((s for s in data["skills_required"] if s["canonical_name"] == "fastapi"), None)
+    assert fastapi_skill is not None
+    assert len(fastapi_skill["related_skills"]) > 0
+    assert "pydantic" in fastapi_skill["related_skills"] or "docker" in fastapi_skill["related_skills"]
+
+
+def test_match_api_returns_role_tailored_roadmap(client):
+    """Verify role_roadmap in API response matches the selected career role."""
+    jd = "Requirements:\n- Python and NumPy required."
+
+    # 1. AI/ML Engineer
+    res_aiml = client.post("/api/v1/skillgraph/match", json={
+        "job_description": jd,
+        "target_role": "aiml_engineer",
+    })
+    assert res_aiml.status_code == 200
+    data_aiml = res_aiml.json()
+    assert "role_roadmap" in data_aiml
+    assert len(data_aiml["role_roadmap"]) == 4
+    aiml_skills = [t["skill_name"] for t in data_aiml["role_roadmap"]]
+    assert aiml_skills == ["numpy", "pandas", "scikit-learn", "model-evaluation"]
+
+    # 2. Generative AI Engineer
+    res_genai = client.post("/api/v1/skillgraph/match", json={
+        "job_description": jd,
+        "target_role": "genai_engineer",
+    })
+    assert res_genai.status_code == 200
+    data_genai = res_genai.json()
+    assert len(data_genai["role_roadmap"]) == 4
+    genai_skills = [t["skill_name"] for t in data_genai["role_roadmap"]]
+    assert genai_skills == ["llm-api", "embeddings", "langchain", "generative-ai"]
+
+    # 3. SDE
+    res_sde = client.post("/api/v1/skillgraph/match", json={
+        "job_description": jd,
+        "target_role": "sde",
+    })
+    assert res_sde.status_code == 200
+    data_sde = res_sde.json()
+    assert len(data_sde["role_roadmap"]) == 4
+    sde_skills = [t["skill_name"] for t in data_sde["role_roadmap"]]
+    assert sde_skills == ["git", "fastapi", "postgresql", "pytest"]
+
+    # Verify role_relevance and objective are non-empty for all roles via API
+    for r_data in (data_aiml, data_genai, data_sde):
+        for task in r_data["role_roadmap"]:
+            assert task.get("role_relevance") or task.get("target_role_relevance")
+            assert task.get("objective") or task.get("description")
+            relevance = task.get("role_relevance") or task.get("target_role_relevance")
+            objective = task.get("objective") or task.get("description")
+            assert len(relevance.strip()) >= 20
+            assert len(objective.strip()) >= 20

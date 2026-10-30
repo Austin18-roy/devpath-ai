@@ -5,7 +5,12 @@
 
 import { getApiBaseUrl } from "./api";
 import { AnalysisResult } from "./repomind-types";
-import { SkillMatchRequest, SkillMatchResponse } from "./skillgraph-types";
+import {
+  EvidenceConfidence,
+  SkillMatchRequest,
+  SkillMatchResponse,
+  TargetRole,
+} from "./skillgraph-types";
 
 /**
  * Build a SkillMatchRequest payload.
@@ -13,11 +18,13 @@ import { SkillMatchRequest, SkillMatchResponse } from "./skillgraph-types";
  */
 export function buildSkillMatchPayload(
   jobDescription: string,
-  analysisResult?: AnalysisResult | null
+  analysisResult?: AnalysisResult | null,
+  targetRole?: TargetRole | null
 ): SkillMatchRequest {
   return {
     job_description: jobDescription,
     analysis_result: analysisResult ?? null,
+    target_role: targetRole ?? "all",
   };
 }
 
@@ -112,3 +119,33 @@ export function getTierBadgeClasses(tier: string): {
   }
 }
 
+/**
+ * Returns badge styling tokens for an evidence item's confidence rating.
+ */
+export function getConfidenceBadgeClasses(confidence: EvidenceConfidence): {
+  bg: string;
+  text: string;
+  label: string;
+} {
+  switch (confidence) {
+    case "high":
+      return {
+        bg: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+        text: "text-emerald-700 dark:text-emerald-300",
+        label: "High confidence",
+      };
+    case "medium":
+      return {
+        bg: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+        text: "text-amber-700 dark:text-amber-300",
+        label: "Medium confidence",
+      };
+    case "low":
+    default:
+      return {
+        bg: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+        text: "text-zinc-600 dark:text-zinc-400",
+        label: "Low confidence",
+      };
+  }
+}
